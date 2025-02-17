@@ -6,9 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strconv"
+	"time"
 )
 
 const (
@@ -26,6 +27,7 @@ type Client struct {
 	client    *http.Client
 	UserAgent string
 	BaseURL   *url.URL
+	Retry     bool
 }
 
 // NewClient returns a new libraries.io API client
@@ -120,7 +122,7 @@ func CheckResponse(resp *http.Response) error {
 
 	errResp := &ErrorResponse{Response: resp}
 
-	data, err := ioutil.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
 	if err == nil && data != nil {
 		json.Unmarshal(data, errResp)
 	}
@@ -135,39 +137,47 @@ func (c *Client) Do(ctx context.Context, req *http.Request, obj interface{}) (*h
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		select {
-		case <-ctx.Done():
-			// Cancel the HTTP request if the given context is cancelled
-			// This can be because the deadline exceeds or the caller
-			// cancels the context explicitly.
-			c.transport.CancelRequest(req)
-			return nil, ctx.Err()
-		default:
-			// If we have encountered an url.Error make sure
-			// to redact the API secret key from the URL
-			if urlError, ok := err.(*url.Error); ok {
-				if url, err := url.Parse(urlError.URL); err == nil {
-					urlError.URL = redactAPIKey(url).String()
-					return nil, urlError
-				}
+		// If we have encountered an url.Error make sure
+		// to redact the API secret key from the URL
+		if urlError, ok := err.(*url.Error); ok {
+			if url, err := url.Parse(urlError.URL); err == nil {
+				urlError.URL = redactAPIKey(url).String()
+				return nil, urlError
 			}
-			return nil, err
 		}
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	// Check that the response's status code is OK
 	if err := CheckResponse(resp); err != nil {
+		// If we got a 429 and want to retry, just execute again.
+		// Note: only supported for GET requests.
+		if c.Retry &&
+			resp.StatusCode == http.StatusTooManyRequests &&
+			req.Method == http.MethodGet &&
+			resp.Header.Get("X-RateLimit-Reset") != "" {
+			timeToWait, err := strconv.Atoi(resp.Header.Get("X-RateLimit-Reset"))
+			if err != nil {
+				return resp, err
+			}
+
+			// Wait the reset time + 1 second before retrying.
+			time.Sleep(time.Second * time.Duration(timeToWait+1))
+
+			return c.Do(ctx, req, obj)
+		}
 		return resp, err
+	}
+
+	// Always read the full body to prevent leaving the request open.
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
 	}
 
 	// Load body into the given obj
 	if obj != nil {
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-
 		err = json.Unmarshal(body, obj)
 		if err != nil {
 			return nil, err

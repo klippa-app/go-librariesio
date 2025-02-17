@@ -19,6 +19,8 @@ type Project struct {
 	LatestStableRelease      *Release   `json:"latest_stable_release,omitempty"`
 	Name                     *string    `json:"name,omitempty"`
 	NormalizedLicenses       []*string  `json:"normalized_licenses,omitempty"`
+	LicenseNormalized        *bool      `json:"license_normalized,omitempty"`
+	Licenses                 *string    `json:"licenses,omitempty"`
 	PackageManagerURL        *string    `json:"package_manager_url,omitempty"`
 	Platform                 *string    `json:"platform,omitempty"`
 	Rank                     *int       `json:"rank,omitempty"`
@@ -35,8 +37,12 @@ type Project struct {
 
 // Release represents a release of the project
 type Release struct {
-	Number      *string    `json:"number,omitempty"`
-	PublishedAt *time.Time `json:"published_at,omitempty"`
+	Number            *string    `json:"number,omitempty"`
+	PublishedAt       *time.Time `json:"published_at,omitempty"`
+	SPDXExpression    *string    `json:"spdx_expression,omitempty"`
+	OriginalLicense   *string    `json:"original_license,omitempty"`
+	ResearchedAt      *time.Time `json:"researched_at,omitempty"`
+	RepositorySources *[]string  `json:"repository_sources,omitempty"`
 }
 
 // ProjectDependency represents a dependency of the project
