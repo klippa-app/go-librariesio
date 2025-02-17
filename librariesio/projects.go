@@ -40,7 +40,6 @@ type Release struct {
 	Number            *string    `json:"number,omitempty"`
 	PublishedAt       *time.Time `json:"published_at,omitempty"`
 	SPDXExpression    *string    `json:"spdx_expression,omitempty"`
-	OriginalLicense   *string    `json:"original_license,omitempty"`
 	ResearchedAt      *time.Time `json:"researched_at,omitempty"`
 	RepositorySources *[]string  `json:"repository_sources,omitempty"`
 }
